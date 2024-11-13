@@ -22,6 +22,7 @@ RDEPENDS:${PN} = " \
     ${@bb.utils.contains("SUBMACHINE", "micro", "", "usb-modeswitch-data", d)} \
     \
     bsp-basefiles \
+    maccalc \
     memtool \
     ${@bb.utils.contains("SUBMACHINE", "micro", "", "mini-snmpd", d)} \
     c-periphery \
