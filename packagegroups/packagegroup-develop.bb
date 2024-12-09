@@ -49,4 +49,5 @@ RDEPENDS:${PN} = " \
     stress-ng \
     systemd-analyze \
     tmux \
+    vim \
 "
