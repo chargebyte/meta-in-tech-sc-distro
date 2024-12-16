@@ -49,5 +49,6 @@ RDEPENDS:${PN} = " \
     stress-ng \
     systemd-analyze \
     tmux \
+    ${@bb.utils.contains("MACHINE", "chargesom", "tulum-utils-bash-completion", "", d)} \
     vim \
 "
