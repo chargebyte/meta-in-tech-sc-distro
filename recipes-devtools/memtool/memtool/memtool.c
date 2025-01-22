@@ -19,12 +19,29 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
 
-int g_size = 4;
-unsigned long g_paddr;
+#if __SIZEOF_POINTER__ == 8
+#define addr_t unsigned long long int
+#define PRIaddr_t "llX"
+#define SUPPORT_64BIT 1
+#else
+#define addr_t unsigned long int
+#define PRIaddr_t "lX"
+#define SUPPORT_64BIT 0
+#endif
+
+unsigned char g_size = __SIZEOF_POINTER__;
+addr_t g_paddr;
 int g_is_write;
-uint32_t g_value = 0;
-uint32_t g_count = 1;
+unsigned long long int g_value = 0;
+unsigned long int g_count = 1;
+
+/* platform specific padding of hex-pointers */
+#define PTR_PADDING __SIZEOF_POINTER__ * 2
 
 int parse_cmdline(int argc, char ** argv)
 {
@@ -47,10 +64,16 @@ int parse_cmdline(int argc, char ** argv)
 		cur_arg++;
                 g_size = 4;
         }
+#if SUPPORT_64BIT == 1
+	else if (strcmp(argv[cur_arg], "-64") == 0) {
+		cur_arg++;
+                g_size = 8;
+        }
+#endif
 	if (cur_arg >= argc)
 		return -1;
 
-	g_paddr = strtoul(argv[cur_arg], NULL, 16);
+	g_paddr = strtoull(argv[cur_arg], NULL, 16);
 	if (!g_paddr)
 		return -1;
 
@@ -58,7 +81,7 @@ int parse_cmdline(int argc, char ** argv)
 		g_is_write = 1;
 		if (strlen(str) > 1) {
 			str++;
-			g_value = strtoul(str, NULL, 16);
+			g_value = strtoull(str, NULL, 16);
 			return 0;
 		}
 	}
@@ -73,61 +96,69 @@ int parse_cmdline(int argc, char ** argv)
 			if (++cur_arg >= argc)
 				return -1;
 		}
-		g_value = strtoul(argv[cur_arg], NULL, 16);
+		g_value = strtoull(argv[cur_arg], NULL, 16);
 	}
 	else {
 		if (g_is_write)
-			g_value = strtoul(argv[cur_arg], NULL, 16);
+			g_value = strtoull(argv[cur_arg], NULL, 16);
 		else
 			g_count = strtoul(argv[cur_arg], NULL, 16);
 	}
 	return 0;
 }
 
-void read_mem(void * addr, uint32_t count, uint32_t size)
+void read_mem(void * addr, unsigned long int count, unsigned char size)
 {
-	int i;
+	unsigned long int i;
 	uint8_t * addr8 = addr;
 	uint16_t * addr16 = addr;
 	uint32_t * addr32 = addr;
+	uint64_t * addr64 = addr;
 
 	switch (size)
 	{
 		case 1:
 			for (i = 0; i < count; i++) {
 				if ( (i % 16) == 0 )
-					printf("\n0x%08X: ", g_paddr);
-				printf(" %02X", addr8[i]);
+					printf("\n0x%0*" PRIaddr_t ": ", PTR_PADDING, g_paddr);
+				printf(" %02" PRIX8, addr8[i]);
 				g_paddr++;
 			}
 			break;
 		case 2:
 			for (i = 0; i < count; i++) {
 				if ( (i % 8) == 0 )
-					printf("\n0x%08X: ", g_paddr);
-				printf(" %04X", addr16[i]);
+					printf("\n0x%0*" PRIaddr_t ": ", PTR_PADDING, g_paddr);
+				printf(" %04" PRIX16, addr16[i]);
 				g_paddr += 2;
 			}
 			break;
 		case 4:
 			for (i = 0; i < count; i++) {
 				if ( (i % 4) == 0 )
-					printf("\n0x%08X: ", g_paddr);
-				printf(" %08X", addr32[i]);
+					printf("\n0x%0*" PRIaddr_t ": ", PTR_PADDING, g_paddr);
+				printf(" %08" PRIX32, addr32[i]);
 				g_paddr += 4;
+			}
+			break;
+		case 8:
+			for (i = 0; i < count; i++) {
+				if ( (i % 2) == 0 )
+					printf("\n0x%0*" PRIaddr_t ": ", PTR_PADDING, g_paddr);
+				printf(" %016" PRIX64, addr64[i]);
+				g_paddr += 8;
 			}
 			break;
 	}
 	printf("\n\n");
-
 }
 
-void write_mem(void * addr, uint32_t value, uint32_t size)
+void write_mem(void * addr, unsigned long long int value, unsigned char size)
 {
-	int i;
 	uint8_t * addr8 = addr;
 	uint16_t * addr16 = addr;
 	uint32_t * addr32 = addr;
+	uint64_t * addr64 = addr;
 
 	switch (size)
 	{
@@ -140,6 +171,9 @@ void write_mem(void * addr, uint32_t value, uint32_t size)
 		case 4:
 			*addr32 = value;
 			break;
+		case 8:
+			*addr64 = value;
+			break;
 	}
 }
 
@@ -148,14 +182,15 @@ int main(int argc, char **argv)
 	int fd;
 	void * mem;
 	void * aligned_vaddr;
-	unsigned long aligned_paddr;
-	uint32_t aligned_size;
+	size_t aligned_size;
+	addr_t aligned_paddr;
 
 	if (parse_cmdline(argc, argv)) {
 		printf("Usage:\n\n" \
-		       "Read memory: memtool [-8 | -16 | -32] <phys addr> <count>\n" \
-		       "Write memory: memtool [-8 | -16 | -32] <phys addr>=<value>\n\n" \
-		       "Default access size is 32-bit.\n\nAddress, count and value are all in hex.\n");
+		       "Read memory: memtool [-8 | -16 | -32%1$s] <phys addr> <count>\n" \
+		       "Write memory: memtool [-8 | -16 | -32%1$s] <phys addr>=<value>\n\n" \
+		       "Default access size is %2$u-bit.\n\nAddress, count and value are all in hex.\n",
+		       SUPPORT_64BIT ? " | -64" : "", __SIZEOF_POINTER__ * 8);
 		return 1;
 	}
 
@@ -167,9 +202,9 @@ int main(int argc, char **argv)
 	aligned_size = (aligned_size + 4096 - 1) & ~(4096 - 1);
 
 	if (g_is_write)
-		printf("Writing %d-bit value 0x%X to address 0x%08X\n", g_size*8, g_value, g_paddr);
+		printf("Writing %d-bit value 0x%llX to address 0x%0*" PRIaddr_t "\n", g_size*8, g_value, PTR_PADDING, g_paddr);
 	else
-		printf("Reading 0x%X count starting at address 0x%08X\n", g_count, g_paddr);
+		printf("Reading 0x%lX count starting at address 0x%0*" PRIaddr_t "\n", g_count, PTR_PADDING, g_paddr);
 
 	if ((fd = open("/dev/mem", O_RDWR, 0)) < 0)
 		return 1;
@@ -181,7 +216,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	mem = (void *)((uint32_t)aligned_vaddr + (g_paddr - aligned_paddr));
+	mem = (void *)((addr_t)aligned_vaddr + (g_paddr - aligned_paddr));
 
 	if (g_is_write) {
 		write_mem(mem, g_value, g_size);
