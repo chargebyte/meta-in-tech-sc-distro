@@ -5,7 +5,7 @@
 SUMMARY = "Freescale's memtool command line tool"
 
 LICENSE = "GPL-2.0-only"
-LIC_FILES_CHKSUM = "file://memtool.c;md5=b8124e34443f601f4be940bf9c6a32eb"
+LIC_FILES_CHKSUM = "file://memtool.c;beginline=1;endline=12;md5=f2e470b1341efde8c526dae4f7d9b8a9"
 
 SRC_URI = "file://memtool.c"
 
