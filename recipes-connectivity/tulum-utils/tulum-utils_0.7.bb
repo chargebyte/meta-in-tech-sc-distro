@@ -8,7 +8,7 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=dbc8c49aa6fe32a4b70291423a8264f4"
 
 SRC_URI = "git://github.com/Vertexcom-dev/tulum_utils.git;protocol=https;branch=main"
 
-SRCREV = "ca9e0b5042229847c1d4cc89378400ba0fdb2ef2"
+SRCREV = "03e95c992c8c71e92d90b05e0303f2bd4ed97685"
 PV = "0.7+git${SRCPV}"
 
 S = "${WORKDIR}/git"
